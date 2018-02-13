@@ -1,0 +1,397 @@
+configs:
+  alerts_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/dashbase-alerts/conf/config.yml
+  api_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/dashbase-api/conf/config.yml
+  dashbase-license:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/dashbase-license.yml
+  grafana_api_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/dashboards/dashboard-api.json
+  grafana_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/custom.ini
+  grafana_kafka_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/dashboards/dashboard-kafka.json
+  grafana_plugin_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/plugin.json
+  grafana_proxy_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/dashboards/dashboard-proxy.json
+  grafana_restart_app_sh:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/restart_dashbase_app.sh
+  grafana_table_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/grafana/dashboards/dashboard-table.json
+  kafka_metricbeat_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/metricbeat/kafka.yml
+  monitor_filebeat_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/filebeat/filebeat.yml
+  monitor_metricbeat_global_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/metricbeat/global.yml
+  monitor_metricbeat_singleton_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/metricbeat/singleton.yml
+  monitor_table_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/dashbase-tables/monitor/config.yml
+  monitor_warg_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/warg/monitor.yml
+  proxy_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/proxy/config.yml
+  proxy_metricbeat_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/metricbeat/proxy.yml
+  web_config:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/config/dashbase-web/conf/config.yml
+networks:
+  backend:
+    attachable: true
+    driver: overlay
+  dashbase_backend:
+    external: true
+secrets:
+  jolokia_agent:
+    file: /Users/kevin/Dashbase/dashbase-engine/dashbase-deployment/lib/jolokia-jvm-1.3.7-agent.jar
+services:
+  alerts:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: alerts_config
+      target: /app/config.yml
+    environment:
+      ADMINPORT: 9998
+      API_URL: http://api:9876
+      JAVA_OPTS: -Xmx512m -Xms256m -XX:NewSize=256m
+      PORT: 9898
+    image: dashbase/alerts:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 9898
+      target: 9898
+  api:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: api_config
+      target: /app/config.yml
+    - source: dashbase-license
+      target: /app/dashbase-license.yml
+    depends_on:
+    - zipkin
+    - zookeeper
+    environment:
+      ADMINPORT: 9976
+      JAVA_OPTS: -Xmx1g -Xms512m -XX:NewSize=512m
+      PORT: 9876
+      ZIPKIN_URL: http://zipkin:9411/
+      ZOOKEEPER_URL: zookeeper:2181
+    image: dashbase/api:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 9876
+      target: 9876
+    volumes:
+    - logs:/app/logs:rw
+  dummy:
+    deploy:
+      replicas: 0
+    image: alpine
+    networks:
+      backend: null
+  grafana:
+    configs:
+    - source: grafana_api_config
+      target: /root/.dashbase/grafana/data/plugins/dashbase/dist/dashboards/dashboard-api.json
+    - source: grafana_config
+      target: /root/.dashbase/grafana/conf/custom.ini
+    - source: grafana_kafka_config
+      target: /root/.dashbase/grafana/data/plugins/dashbase/dist/dashboards/dashboard-kafka.json
+    - source: grafana_plugin_config
+      target: /root/.dashbase/grafana/data/plugins/dashbase/dist/plugin.json
+    - source: grafana_proxy_config
+      target: /root/.dashbase/grafana/data/plugins/dashbase/dist/dashboards/dashboard-proxy.json
+    - source: grafana_table_config
+      target: /root/.dashbase/grafana/data/plugins/dashbase/dist/dashboards/dashboard-table.json
+    depends_on:
+    - api
+    image: dashbase/grafana
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 3000
+      target: 3000
+    volumes:
+    - logs:/root/.dashbase/grafana/data/log:rw
+  grafana_restart_dashbase_app:
+    configs:
+    - source: grafana_restart_app_sh
+    entrypoint: /bin/sh /grafana_restart_app_sh
+    image: byrnedo/alpine-curl
+    networks:
+      dashbase_backend: null
+  kafka:
+    depends_on:
+    - kafka_zookeeper
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: kafka
+      KAFKA_ADVERTISED_PORT: 9094
+      KAFKA_ADVERTISED_PROTOCOL_NAME: OUTSIDE
+      KAFKA_HEAP_OPTS: -Xmx4G -Xms4G
+      KAFKA_JMX_OPTS: -javaagent:/run/secrets/jolokia_agent.jar=port=8778,host=0.0.0.0
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LOG_DIRS: /dashbase/kafka
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_PROTOCOL_NAME: INSIDE
+      KAFKA_ZOOKEEPER_CONNECT: kafka_zookeeper:2181
+    image: wurstmeister/kafka:1.0.0
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 8778
+    - mode: host
+      protocol: tcp
+      published: 9094
+      target: 9094
+    secrets:
+    - source: jolokia_agent
+      target: jolokia_agent.jar
+    volumes:
+    - kafka_data:/dashbase/kafka:rw
+    - kafka_logs:/opt/kafka/logs:rw
+  kafka_metricbeat:
+    configs:
+    - source: kafka_metricbeat_config
+      target: /usr/share/metricbeat/metricbeat.yml
+    image: docker.elastic.co/beats/metricbeat:6.1.2
+    networks:
+      dashbase_backend: null
+    volumes:
+    - kafka_data:/dashbase/kafka:rw
+    - kafka_logs:/opt/kafka/logs:rw
+  kafka_zookeeper:
+    image: zookeeper
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 2181
+    volumes:
+    - kafka_zookeeper_data:/data:rw
+    - kafka_zookeeper_datalog:/datalog:rw
+  monitor_filebeat:
+    configs:
+    - source: monitor_filebeat_config
+      target: /usr/share/filebeat/filebeat.yml
+    deploy:
+      mode: global
+    image: docker.elastic.co/beats/filebeat:6.0.0
+    networks:
+      dashbase_backend: null
+    volumes:
+    - kafka_logs:/app/kafka/logs:rw
+    - logs:/app/logs:rw
+  monitor_kafka:
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: monitor_kafka
+      KAFKA_ADVERTISED_PORT: 9094
+      KAFKA_ADVERTISED_PROTOCOL_NAME: OUTSIDE
+      KAFKA_CREATE_TOPICS: _logs:1:1,_logs_avro:1:1,_metrics:1:1,_metrics_avro:1:1
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LOG_DIRS: /opt/kafka/data
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_PROTOCOL_NAME: INSIDE
+      KAFKA_ZOOKEEPER_CONNECT: monitor_zookeeper:2181
+    image: wurstmeister/kafka:1.0.0
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 9092
+    volumes:
+    - monitor_kafka_data:/opt/kafka/data:rw
+  monitor_logs:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: monitor_table_config
+      target: /app/config.yml
+    environment:
+      ADMINPORT: 8988
+      JAVA_OPTS: -Xmx1g -Xms512m -XX:NewSize=512m -XX:+HeapDumpOnOutOfMemoryError
+        -XX:HeapDumpPath=/app/heapdump
+      KAFKA_TOPIC: _logs
+      PORT: 8888
+      STORE_RAW_INPUT: "true"
+      TABLE_NAME: _logs
+      ZIPKIN_URL: http://zipkin:9411/
+      ZOOKEEPER_URL: zookeeper:2181
+    image: dashbase/table:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 8888
+    - target: 8988
+    volumes:
+    - logs:/app/logs:rw
+    - monitor_index:/dashbase/index:rw
+  monitor_metricbeat_singleton:
+    configs:
+    - source: monitor_metricbeat_singleton_config
+      target: /usr/share/metricbeat/metricbeat.yml
+    image: docker.elastic.co/beats/metricbeat:6.1.2
+    networks:
+      dashbase_backend: null
+  monitor_metrics:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: monitor_table_config
+      target: /app/config.yml
+    environment:
+      ADMINPORT: 10988
+      JAVA_OPTS: -Xmx2g -Xms1g -XX:NewSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/heapdump
+      KAFKA_TOPIC: _metrics
+      PORT: 10888
+      STORE_RAW_INPUT: "false"
+      TABLE_NAME: _metrics
+      ZIPKIN_URL: http://zipkin:9411/
+      ZOOKEEPER_URL: zookeeper:2181
+    image: dashbase/table:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 10888
+    - target: 10988
+    volumes:
+    - logs:/app/logs:rw
+    - monitor_index:/dashbase/index:rw
+  monitor_traces:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: monitor_table_config
+      target: /app/config.yml
+    environment:
+      ADMINPORT: 11988
+      JAVA_OPTS: -Xmx2g -Xms1g -XX:NewSize=512m -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/heapdump
+      KAFKA_TOPIC: _traces
+      PORT: 11888
+      STORE_RAW_INPUT: "true"
+      TABLE_NAME: _traces
+      ZIPKIN_URL: http://zipkin:9411/
+      ZOOKEEPER_URL: zookeeper:2181
+    image: dashbase/table:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 11888
+    - target: 11988
+    volumes:
+    - logs:/app/logs:rw
+    - monitor_index:/dashbase/index:rw
+  monitor_warg:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: monitor_warg_config
+      target: /app/config.yml
+    image: dashbase/warg:nightly
+    networks:
+      dashbase_backend: null
+  monitor_zookeeper:
+    image: zookeeper
+    networks:
+      dashbase_backend: null
+    ports:
+    - target: 2181
+  proxy:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: proxy_config
+      target: /app/config.yml
+    environment:
+      KAFKA_BROKER_URL: kafka:9092
+    image: dashbase/proxy:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 9200
+      target: 9200
+    volumes:
+    - logs:/app/logs:rw
+  proxy_metricbeat:
+    configs:
+    - source: proxy_metricbeat_config
+      target: /usr/share/metricbeat/metricbeat.yml
+    image: docker.elastic.co/beats/metricbeat:6.1.2
+    networks:
+      dashbase_backend: null
+  web:
+    command:
+    - server
+    - /app/config.yml
+    configs:
+    - source: web_config
+      target: /app/config.yml
+    depends_on:
+    - api
+    - zipkin
+    environment:
+      ADMINPORT: 8180
+      API_HOST: api
+      API_PORT: 9876
+      JAVA_OPTS: -Xmx512m -Xms512m -XX:NewSize=512m
+      PORT: 8080
+      ZIPKIN_URL: http://zipkin:9411/
+    image: dashbase/web:nightly
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 8080
+      target: 8080
+    volumes:
+    - logs:/app/logs:rw
+  zipkin:
+    environment:
+      API_URL: http://api:9876
+      KAFKA_SSL: "false"
+      KAFKA_TOPIC: _traces_avro
+      KAFKA_URL: monitor_kafka:9092
+      MAX_RESULTS_NUM: 100
+      TABLE: _traces
+    image: dashbase/zipkin:1.0.0-SNAPSHOT
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 9411
+      target: 9411
+    volumes:
+    - logs:/app/logs:rw
+  zookeeper:
+    image: zookeeper
+    networks:
+      dashbase_backend: null
+    ports:
+    - published: 2181
+      target: 2181
+    volumes:
+    - zookeeper_data:/data:rw
+    - zookeeper_datalog:/datalog:rw
+version: '3.4'
+volumes:
+  kafka_data: {}
+  kafka_logs: {}
+  kafka_zookeeper_data: {}
+  kafka_zookeeper_datalog: {}
+  logs:
+    external: true
+    name: logs
+  monitor_index: {}
+  monitor_kafka_data: {}
+  table_index: {}
+  zookeeper_data: {}
+  zookeeper_datalog: {}
+
