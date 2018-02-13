@@ -1,14 +1,62 @@
 [
   {
     "type": "stack",
-    "title": "Dashbase",
-    "description": "Dashbase Cluster",
+    "title": "Dashbase Full",
+    "description": "Dashbase All  Cluster",
     "note": "Deploys an insecure Dashbase cluster.",
     "platform": "linux",
     "logo": "https://github.com/dashbase/brand/blob/master/400-dashbase.png?raw=true",
     "repository": {
       "url": "https://github.com/khou/dashbase-portainer-templates",
       "stackfile": "stacks/test-stack.yml"
+    }
+  },
+  {
+    "type": "stack",
+    "title": "Dashbase Core",
+    "description": "Dashbase Core Stack",
+    "note": "Deploys an insecure Dashbase Core.",
+    "platform": "linux",
+    "logo": "https://github.com/dashbase/brand/blob/master/400-dashbase.png?raw=true",
+    "repository": {
+      "url": "https://github.com/khou/dashbase-portainer-templates",
+      "stackfile": "stacks/core-stack.yml"
+    }
+  },
+  {
+    "type": "stack",
+    "title": "Kafka",
+    "description": "Kafka Stack",
+    "note": "Deploys an insecure Kafka for Dashbase.",
+    "platform": "linux",
+    "logo": "https://github.com/dashbase/brand/blob/master/400-dashbase.png?raw=true",
+    "repository": {
+      "url": "https://github.com/khou/dashbase-portainer-templates",
+      "stackfile": "stacks/kafka-stack.yml"
+    }
+  },
+  {
+    "type": "stack",
+    "title": "Dashbase Elastic Proxy",
+    "description": "Dashbase Elastic Proxy stack",
+    "note": "Deploys an insecure Dashbase Elastic Proxy.",
+    "platform": "linux",
+    "logo": "https://github.com/dashbase/brand/blob/master/400-dashbase.png?raw=true",
+    "repository": {
+      "url": "https://github.com/khou/dashbase-portainer-templates",
+      "stackfile": "stacks/elastic-stack.yml"
+    }
+  },
+  {
+    "type": "stack",
+    "title": "Dashbase",
+    "description": "Dashbase Base Stack",
+    "note": "Deploys a swarm network for Dashbase services.",
+    "platform": "linux",
+    "logo": "https://github.com/dashbase/brand/blob/master/400-dashbase.png?raw=true",
+    "repository": {
+      "url": "https://github.com/khou/dashbase-portainer-templates",
+      "stackfile": "stacks/base-stack.yml"
     }
   }
 ]
